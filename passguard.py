@@ -308,7 +308,7 @@ def display_results(password):
     else:
         color = Fore.RED
 
-    print_banner()
+    
 
     print_section("PASSWORD STRENGTH")
 
@@ -363,6 +363,7 @@ def display_results(password):
 
 # Main program
 def main():
+    print_banner()
     password = getpass.getpass(
         Fore.YELLOW + "\n  Enter password to check: "
     )
