@@ -1,84 +1,180 @@
 
-import getpass
 import string
+import math
+import re
+import getpass
+from pathlib import Path
 
 
-# 1. Check password length
-def check_length(pw):
+#  Password length checking
+def check_length(password):
     score = 0
 
-    if len(pw) >= 8:
+    if len(password) >= 8:
         score += 1
-
-    if len(pw) >= 12:
+    if len(password) >= 12:
         score += 1
-
-    if len(pw) >= 16:
+    if len(password) >= 16:
         score += 2
 
     return score
 
 
-# 2. Check for lowercase letters
-def check_lowercase(pw):
-    return 1 if any(c.islower() for c in pw) else 0
+# Character checking
+def calculate_base_score(password):
+    score = check_length(password)
 
+    if any(c.islower() for c in password):
+        score += 1
 
-# 3. Check for uppercase letters
-def check_uppercase(pw):
-    return 1 if any(c.isupper() for c in pw) else 0
+    if any(c.isupper() for c in password):
+        score += 1
 
+    if any(c.isdigit() for c in password):
+        score += 1
 
-# 4. Check for numbers
-def check_digits(pw):
-    return 1 if any(c.isdigit() for c in pw) else 0
-
-
-# 5. Check for symbols
-def check_symbols(pw):
-    return 2 if any(c in string.punctuation for c in pw) else 0
-
-
-# 6. Generate improvement tips
-def get_tips(pw):
-    tips = []
-
-    if len(pw) < 8:
-        tips.append("Use at least 8 characters.")
-
-    if len(pw) < 12:
-        tips.append("Consider using at least 12 characters.")
-
-    if not any(c.islower() for c in pw):
-        tips.append("Add at least one lowercase letter.")
-
-    if not any(c.isupper() for c in pw):
-        tips.append("Add at least one uppercase letter.")
-
-    if not any(c.isdigit() for c in pw):
-        tips.append("Add at least one number.")
-
-    if not any(c in string.punctuation for c in pw):
-        tips.append("Add at least one symbol.")
-
-    return tips
-
-
-# 7. Calculate total score
-def calculate_score(pw):
-    score = (
-        check_length(pw)
-        + check_lowercase(pw)
-        + check_uppercase(pw)
-        + check_digits(pw)
-        + check_symbols(pw)
-    )
+    if any(c in string.punctuation for c in password):
+        score += 2
 
     return score
 
 
-# 8. Determine password strength
-def get_strength(score):
+# Estimate password entropy
+def calculate_entropy(password):
+    pool_size = 0
+
+    if any(c.islower() for c in password):
+        pool_size += 26
+
+    if any(c.isupper() for c in password):
+        pool_size += 26
+
+    if any(c.isdigit() for c in password):
+        pool_size += 10
+
+    if any(c in string.punctuation for c in password):
+        pool_size += len(string.punctuation)
+
+    if pool_size == 0:
+        return 0
+
+    return len(password) * math.log2(pool_size)
+
+# Cracking Time Checking
+def estimate_crack_time(entropy, guesses_per_second=1_000_000_000):
+    """
+    Estimate password cracking time.
+
+    Assumes an attacker needs, on average,
+    half of the total possible guesses.
+    """
+
+    if entropy <= 0:
+        return "Instant"
+
+    total_combinations = 2 ** entropy
+
+    average_guesses = total_combinations / 2
+
+    seconds = average_guesses / guesses_per_second
+
+    if seconds < 1:
+        return "Less than a second"
+
+    minutes = seconds / 60
+    hours = minutes / 60
+    days = hours / 24
+    years = days / 365.25
+
+    if seconds < 60:
+        return f"{seconds:.2f} seconds"
+
+    elif minutes < 60:
+        return f"{minutes:.2f} minutes"
+
+    elif hours < 24:
+        return f"{hours:.2f} hours"
+
+    elif days < 365.25:
+        return f"{days:.2f} days"
+
+    elif years < 1000:
+        return f"{years:.2f} years"
+
+    else:
+        return f"{years:,.2f} years"
+
+
+
+# Load common passwords
+def load_common_passwords():
+    file_path = Path(__file__).with_name("common.txt")
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as file:
+            return {
+                line.strip().lower()
+                for line in file
+                if line.strip()
+            }
+    except FileNotFoundError:
+        return set()
+
+
+# Detect common passwords or words
+def has_common_word(password, common_passwords=None):
+    if common_passwords is None:
+        common_passwords = load_common_passwords()
+
+    password = password.lower()
+
+    return any(word in password for word in common_passwords)
+
+
+# Detect keyboard sequences
+def has_keyboard_sequence(password):
+    sequences = [
+        "qwerty", "asdf", "zxcv",
+        "1234", "2345", "3456",
+        "abcd", "9876"
+    ]
+
+    password = password.lower()
+
+    return any(sequence in password for sequence in sequences)
+
+
+# Detect repeated characters
+def has_repeated_characters(password):
+    return bool(re.search(r"(.)\1{2,}", password))
+
+
+# Detect years such as 2004 or 1999
+def has_year_pattern(password):
+    return bool(re.search(r"(19|20)\d{2}", password))
+
+
+# Calculate final score
+def calculate_score(password):
+    score = calculate_base_score(password)
+
+    if has_common_word(password):
+        score -= 2
+
+    if has_keyboard_sequence(password):
+        score -= 2
+
+    if has_repeated_characters(password):
+        score -= 1
+
+    if has_year_pattern(password):
+        score -= 1
+
+    return max(0, score)
+
+
+# Password rating
+def get_rating(score):
     if score <= 3:
         return "Weak"
     elif score <= 6:
@@ -87,33 +183,38 @@ def get_strength(score):
         return "Strong"
 
 
-# 9. Main program
+# Main program
 def main():
-    print("=" * 40)
-    print("       PASSGUARD PASSWORD CHECKER")
-    print("=" * 40)
+    password = getpass.getpass("Enter your password to check: ")
 
-    password = getpass.getpass("Enter a sample password: ")
+    base_score = calculate_base_score(password)
+    final_score = calculate_score(password)
+    entropy = calculate_entropy(password)
+    crack_time = estimate_crack_time(entropy)
 
-    score = calculate_score(password)
-    strength = get_strength(score)
-    tips = get_tips(password)
+    print("\n--- PassGuard Results ---")
 
-    print("\nPassword Analysis")
-    print("-" * 40)
+    print(f"Base Score: {base_score}/9")
+    print(f"Final Score: {final_score}/9")
+    print(f"Rating: {get_rating(final_score)}")
+    print(f"Estimated Entropy: {entropy:.2f} bits")
+    print(f"Estimated Crack Time: {crack_time}")
 
-    print(f"Score: {score}/9")
-    print(f"Strength: {strength}")
+    print("\nPattern Detection:")
 
-    if tips:
-        print("\nSuggestions to improve your password:")
+    if has_common_word(password):
+        print("- Contains a common password or word.")
 
-        for tip in tips:
-            print("- " + tip)
-    else:
-        print("\nGreat! All basic password rules are satisfied.")
+    if has_keyboard_sequence(password):
+        print("- Contains a keyboard sequence.")
 
-    print("\nYour password was not displayed or saved.")
+    if has_repeated_characters(password):
+        print("- Contains repeated characters.")
+
+    if has_year_pattern(password):
+        print("- Contains a year pattern.")
+
+    print("\nPassword check completed.")
 
 
 if __name__ == "__main__":
